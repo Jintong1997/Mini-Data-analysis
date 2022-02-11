@@ -1,0 +1,259 @@
+---
+title: "Mini Data-Analysis 1"
+output: github_document
+---
+```{r}
+knitr::opts_chunk$set(error = TRUE)
+```
+
+## 1 Select Data
+The **datateachr** package have 7 semi-tidy datasets for educational purposes. I choose four of them first, which is:
+
+1. apt_buildings 
+2. cancer_sample 
+3. flow_sample 
+4. parking_meters
+
+```{r}
+library(datateachr)
+library(tidyverse)
+library(car)
+library("Hmisc")
+library(easyGgplot2)
+```
+
+### attributes of these data
+
+#### Apt_building
+`apt_building` contains Toronto apartment building information for buildings that are registered in the Apartment Building Standard (ABS) program. 
+WE can see the attributes in following:
+
+Class:
+
+```{r}
+class(apt_buildings)
+```
+It is a **tibble** with 3455 rows and 37 columns.
+
+Details:
+
+```{r}
+glimpse(apt_buildings)
+```
+There are various of character and numeric variables in this dataset.
+
+Missing Data:
+
+```{r}
+sum(is.na(apt_buildings))
+as_tibble(data.frame(variable=names(apt_buildings),na_number=colSums(is.na(apt_buildings))))
+```
+
+And for all the variables, there are 6286 missing data. When we focus on each variable, it is obvious that `amenities` and `prop_management_company_name` have lots of missing data.
+
+#### Cancer_sample
+`cancer_sample` contains a sample of quantitative features that were calculated from images of nuclei present in fine needle aspiration biopsies of breast masses from patients at the University of Wisconsin Hospital.
+WE can see the attributes in following:
+
+Class:
+
+```{r}
+class(cancer_sample)
+```
+It is a **tibble** with 569 rows and 32 columns. 
+
+Details:
+
+```{r}
+glimpse(cancer_sample)
+```
+Nearly all of these variables are numeric, instead of `diagnosis` which is a **Binary variable**.
+
+Missing Data:
+```{r}
+sum(is.na(cancer_sample))
+as_tibble(data.frame(variable=names(cancer_sample),na_number=colSums(is.na(cancer_sample))))
+```
+
+For all the variables, there is no missing data.
+
+#### Flow_sample
+`flow_sample` contains a sample of historical flow rate extreme data collected by the Government of Canada at station 05BB001.
+WE can see the attributes in following:
+
+Class:
+```{r}
+class(flow_sample)
+```
+It is a **tibble** with 218 rows and 7 columns. 
+
+Details:
+```{r}
+glimpse(flow_sample)
+```
+There are three characteristic and four numeric variables. 
+
+Missing Data:
+
+```{r}
+sum(is.na(flow_sample))
+as_tibble(data.frame(variable=names(flow_sample),na_number=colSums(is.na(flow_sample))))
+```
+For all the variables, there are 125 missing data, and nearly all of them are caused by `sym`.
+
+#### Parking_meters
+`parking_meters` contains information on the rates and time limits for parking meters in Vancouver. WE can see the attributes in following:
+
+Class:
+```{r}
+class(parking_meters)
+```
+It is a **tibble** with 10032 rows and 22 columns.
+
+Details:
+```{r}
+glimpse(parking_meters)
+```
+There are various of character and numeric variables.
+
+Missing Data:
+
+```{r}
+sum(is.na(parking_meters))
+as_tibble(data.frame(variable=names(parking_meters),na_number=colSums(is.na(parking_meters))))
+```
+And for all the variables, there are 19096 missing data. When we focus on each variable, it is obvious that `rate_misc` (who has 9218 missing data) and `time_misc` (who has 9551 missing data) contributes to that.
+
+For each of these data, I would like to explore the following:
+
+1. In `apt_buildings`: How do the number of elevators, storeys, units and accessible parking spaces change as time goes on? 
+2. In `cancer_sample`: What’s the relationship between diagnosis and the mean of something, like radius_mean, texture_mean, perimeter_mean...
+3. In `flow_sample`: Does the flow rate have periodically change with years or month? 
+4. In `parking_meters`: Does the rate will be different for different time limits, and for different meter_head?
+
+## 2 Narrow down to 2 datasets
+I will not choose `flow_sample` for there are not many variables in this data and in the same time, for variable `sym`, there are many missing data, which let me think this variable is not useful in analysis.
+I discard `cancer_sample data`, since there is just one binary variable.
+I am interested in apartment buildings and would like to explore it. I would like to know whether as time goes on, the facilities of buildings would change and what are the relationships between different variables.
+
+## 3 Explore `apt_buildings`
+
+### Clean Data
+
+We can now show the variables with larger than 80 missing data, the histogram shows:
+```{r}
+na_apt <- as_tibble(data.frame(variable=names(apt_buildings),na_number=colSums(is.na(apt_buildings))))
+na_apt %>% filter(na_number>=80) %>% ggplot()+
+  geom_bar(aes(x =variable, y = na_number), stat = "identity")+
+  theme_minimal()+
+  coord_flip()
+```
+
+Considering the amount of data and the proportion of missing values, I will discard variable `amenities` and `prop_management_company_name`. 
+
+```{r}
+apt_buildings %>% ggplot(aes(year_built))+
+  geom_density()+
+  theme_minimal()
+```
+
+It is clear that the built years are mainly between 1950 and 1960. I create new variable named `build_year` which splits `year_built` into four parts: before 1955, between 1955 and 1960, between 1960 and 1970 and after 1970. All rows with missing data are deleted. A new data names apt_buildings1 is developed. 
+
+```{r}
+apt_buildings1 <- apt_buildings %>% select(-amenities,-prop_management_company_name) %>% 
+  mutate(build_year=ifelse(year_built<=1970,ifelse(year_built<=1960,ifelse(year_built<=1955,"(-,1955)","(1955,1960)"),"(1960,1970)"),"(1970,-)"))
+
+apt_buildings1<- na.omit(apt_buildings1)
+#table(apt_buildings1$build_year)
+glimpse(apt_buildings1)
+```
+
+### Questions
+
+a. How do the number of elevators, storeys, units and accessible parking spaces change as time goes on?
+
+```{r}
+p_elevator = apt_buildings1 %>% filter(no_of_elevators<=10) %>%
+  ggplot(aes(x = no_of_elevators, y=build_year)) +
+  ggridges::geom_density_ridges()+
+  #scale_x_log10()+
+  theme_minimal()
+
+p_storeys =apt_buildings1 %>%  
+  ggplot(aes(x = no_of_storeys, y=build_year)) +
+  ggridges::geom_density_ridges()+
+  scale_x_log10()+
+  theme_minimal()
+
+p_units = ggplot(apt_buildings1,aes(x = no_of_units, y =build_year)) +
+  ggridges::geom_density_ridges()+
+  scale_x_log10()+
+  theme_minimal()
+
+p_accessible_parking_spaces =apt_buildings1 %>% filter(no_of_accessible_parking_spaces<=50) %>% 
+  ggplot(aes(x = no_of_accessible_parking_spaces, y =build_year)) +
+  ggridges::geom_density_ridges()+
+  theme_minimal()
+
+ggplot2.multiplot(p_elevator, p_storeys, p_units, p_accessible_parking_spaces)
+```
+
+As time goes on, the number of elevators, storeys ,units and accessible parking spaces are become more and more. Compared with accessible parking spaces, the changes of elevators, storeys ,units are more obvious.
+It is obvious to see that the number of storeys are larger than before, more higher buildings after 1960. And it is also clear that as time goes on, units became to be more and more. For elevators, before 1960, the change is obvious, but after that the change of number with time goes on is not obvious. For accessible parking spaces, after 1970, there is begin to have a change. 
+
+b. The relationship between the number of units and storeys.
+
+```{r}
+ggplot(apt_buildings1)+
+  geom_point(aes(no_of_storeys,no_of_units,color=build_year),alpha=0.3)+
+  scale_y_log10()+
+  facet_wrap(~build_year)+
+  theme_minimal()
+```
+
+Before 1955, the number of storeys tend to be less than five with there are various number of units. However later, especially after 1960, there are more and more storeys and units. The change rate of units is not as fast as storeys, which shows in the graph that as the number of storeys larger, the number of units is nearly not change.
+
+```{r}
+b_air <- ggplot(apt_buildings1) + 
+  geom_bar(mapping = aes(build_year, fill = air_conditioning), position = "fill")+
+  theme_minimal()+
+  ggtitle("Air conditioning")+
+  coord_flip()
+
+b_window <- ggplot(apt_buildings1) + 
+  geom_bar(mapping = aes(build_year, fill = window_type), position = "fill")+
+  theme_minimal()+
+  ggtitle("Window type")+
+  coord_flip()
+ggplot2.multiplot(b_air,b_window,cols=1)
+```
+
+Depending on the graph above, we can see that compared with window, the type of air conditioning change more obviously during time goes on. For air conditioning, besides having no air conditioning, individual units tend to have more than central air. Later, individual units reduce and central air become more and more. For window type however, the change do not obvious and double pane always be the most popular type.
+
+c. Do the heating type change with different units and different storeys? 
+```{r}
+ggplot(apt_buildings1)+
+  geom_point(aes(no_of_storeys,no_of_units,color=heating_type),alpha=0.3)+
+  scale_y_log10()+
+  theme_minimal()+
+  facet_wrap(~heating_type)
+```
+
+We would like to know whether as the number of units and storeys changes, the heating type will change. On the graph above, it is obvious that hot water is the most popular type. As the number of units changing, there is no discernible difference about the type of heating. But there might have some link with the number of storeys and the heating type. Hence the following density ridge created:
+
+```{r}
+ggplot(apt_buildings1,aes(no_of_storeys,heating_type))+
+  ggridges::geom_density_ridges()+
+  scale_x_log10()+
+  theme_minimal()
+```
+
+Now it is clear that for buildings with lower storeys, there is less differences between heating types. For buildings with higher storeys, electric and hot water is more popular than forced air gas.   
+
+## 4 Research qustions
+With the exploration above, I would like to ask the following questions:
+
+1. For the Toronto Apartment Building built after 1970 with air conditioning, does the heating type have a relationship with the built year?
+2. For the Toronto Apartment Building with more than one accessible parking space and visitor parking space, what's the relationship between the number of accessible parking spaces and visitor parking available?
+3. For the Toronto Apartment Building built after 1970 with more than one elevators, does the number of elevators and the number of storeys have a positive relationship?
+4. With different number of storeys and units, does the window type have some characteristic?
